@@ -10,6 +10,12 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: bingo
+    description: Photo bingo game
+  - name: admin
+    description: Administrator operations
+  - name: storage
+    description: Uploaded photo delivery
 paths:
   /healthz:
     get:
@@ -24,6 +30,236 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /bingo/teams:
+    get:
+      operationId: listBingoTeams
+      tags: [bingo]
+      summary: List all teams and their current boards
+      responses:
+        "200":
+          description: Current status for all eight teams
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BingoTeam"
+  /bingo/teams/{teamNumber}:
+    get:
+      operationId: getBingoTeam
+      tags: [bingo]
+      summary: Get one team's board
+      parameters:
+        - name: teamNumber
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 8
+      responses:
+        "200":
+          description: Team board and computed progress
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BingoTeam"
+        "404":
+          description: Team not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /bingo/uploads/request-url:
+    post:
+      operationId: requestBingoPhotoUpload
+      tags: [bingo]
+      summary: Create a short-lived upload URL for one photo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PhotoUploadRequest"
+      responses:
+        "200":
+          description: Upload URL and object path
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PhotoUploadUrl"
+        "400":
+          description: Invalid file metadata or board location
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /bingo/teams/{teamNumber}/missions/{missionNumber}/photo:
+    post:
+      operationId: saveBingoPhoto
+      tags: [bingo]
+      summary: Save uploaded photo metadata to a bingo cell
+      parameters:
+        - name: teamNumber
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 8
+        - name: missionNumber
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 9
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SavePhotoInput"
+      responses:
+        "201":
+          description: Photo saved to the cell
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BingoPhoto"
+        "400":
+          description: Invalid photo or board location
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /admin/login:
+    post:
+      operationId: adminLogin
+      tags: [admin]
+      summary: Start an administrator session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminCredentials"
+      responses:
+        "200":
+          description: Session state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminSession"
+        "401":
+          description: Incorrect password
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /admin/logout:
+    post:
+      operationId: adminLogout
+      tags: [admin]
+      summary: End the administrator session
+      responses:
+        "200":
+          description: Session ended
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminSession"
+  /admin/session:
+    get:
+      operationId: getAdminSession
+      tags: [admin]
+      summary: Check whether the administrator is signed in
+      responses:
+        "200":
+          description: Current session state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminSession"
+  /admin/overview:
+    get:
+      operationId: getAdminOverview
+      tags: [admin]
+      summary: Get all teams' photos and progress for the administrator
+      responses:
+        "200":
+          description: Admin overview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminOverview"
+        "401":
+          description: Administrator login required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /admin/missions/{missionNumber}:
+    patch:
+      operationId: updateBingoMission
+      tags: [admin]
+      summary: Change a mission description
+      parameters:
+        - name: missionNumber
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 9
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MissionUpdate"
+      responses:
+        "200":
+          description: Updated mission
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Mission"
+        "401":
+          description: Administrator login required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /storage/objects/{objectId}:
+    get:
+      operationId: getStoredPhoto
+      tags: [storage]
+      summary: Serve a bingo photo
+      parameters:
+        - name: objectId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Stored image bytes
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: Photo not found
 components:
   schemas:
     HealthStatus:
@@ -33,4 +269,136 @@ components:
           type: string
       required:
         - status
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required: [error]
+    Mission:
+      type: object
+      properties:
+        missionNumber:
+          type: integer
+        description:
+          type: string
+      required: [missionNumber, description]
+    BingoPhoto:
+      type: object
+      properties:
+        imageUrl:
+          type: string
+        originalName:
+          type: string
+        uploadedAt:
+          type: string
+          format: date-time
+      required: [imageUrl, originalName, uploadedAt]
+    BingoCell:
+      type: object
+      properties:
+        missionNumber:
+          type: integer
+        description:
+          type: string
+        photo:
+          anyOf:
+            - $ref: "#/components/schemas/BingoPhoto"
+            - type: "null"
+      required: [missionNumber, description, photo]
+    BingoTeam:
+      type: object
+      properties:
+        teamNumber:
+          type: integer
+        cells:
+          type: array
+          items:
+            $ref: "#/components/schemas/BingoCell"
+        filledCount:
+          type: integer
+        bingoLineCount:
+          type: integer
+        completedAt:
+          type: ["string", "null"]
+          format: date-time
+        completionRank:
+          type: ["integer", "null"]
+      required: [teamNumber, cells, filledCount, bingoLineCount, completedAt, completionRank]
+    AdminOverview:
+      type: object
+      properties:
+        teams:
+          type: array
+          items:
+            $ref: "#/components/schemas/BingoTeam"
+        missions:
+          type: array
+          items:
+            $ref: "#/components/schemas/Mission"
+      required: [teams, missions]
+    PhotoUploadRequest:
+      type: object
+      properties:
+        teamNumber:
+          type: integer
+          minimum: 1
+          maximum: 8
+        missionNumber:
+          type: integer
+          minimum: 1
+          maximum: 9
+        originalName:
+          type: string
+          minLength: 1
+          maxLength: 255
+        contentType:
+          type: string
+        size:
+          type: integer
+          minimum: 1
+          maximum: 12582912
+      required: [teamNumber, missionNumber, originalName, contentType, size]
+    PhotoUploadUrl:
+      type: object
+      properties:
+        uploadUrl:
+          type: string
+        objectPath:
+          type: string
+      required: [uploadUrl, objectPath]
+    SavePhotoInput:
+      type: object
+      properties:
+        objectPath:
+          type: string
+        originalName:
+          type: string
+        contentType:
+          type: string
+        size:
+          type: integer
+      required: [objectPath, originalName, contentType, size]
+    AdminCredentials:
+      type: object
+      properties:
+        password:
+          type: string
+          minLength: 1
+          maxLength: 1024
+      required: [password]
+    AdminSession:
+      type: object
+      properties:
+        authenticated:
+          type: boolean
+      required: [authenticated]
+    MissionUpdate:
+      type: object
+      properties:
+        description:
+          type: string
+          minLength: 1
+          maxLength: 500
+      required: [description]
 
