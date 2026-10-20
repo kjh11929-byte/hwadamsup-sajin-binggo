@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "화담숲 사진 빙고"
+description = "교사 8개 조가 화담숲 사진 미션을 함께 진행하고 실시간 진행 상황과 빙고 순위를 확인하는 모바일 웹 앱입니다."
+version = "1.0.0"
+id = "artifacts/forest-bingo"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 20080
+
+[services.development]
+run = "pnpm --filter @workspace/forest-bingo run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/forest-bingo", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/forest-bingo/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "20080"
+BASE_PATH = "/"
