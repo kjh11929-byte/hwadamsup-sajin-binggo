@@ -35,7 +35,7 @@ function ErrorState({ retry }: { retry: () => void }) {
 
 function HomePage() {
   const [, navigate] = useLocation();
-  const teamsQuery = useListBingoTeams({ query: { refetchInterval: 12000 } });
+  const teamsQuery = useListBingoTeams({ query: { queryKey: getListBingoTeamsQueryKey(), refetchInterval: 12000 } });
   const teams = teamsQuery.data ?? [];
   const complete = teams.filter((team) => team.filledCount >= 9).length;
   return <Shell><section className="home-hero fade-up">
@@ -62,6 +62,44 @@ function PhotoPreview({ imageUrl, alt }: { imageUrl: string; alt: string }) {
   return <img src={imageUrl} alt={alt} className="mission-photo" loading="lazy" />;
 }
 
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+const TARGET_IMAGE_BYTES = 2.5 * 1024 * 1024;
+const MAX_IMAGE_EDGE = 1600;
+
+async function preparePhoto(file: File): Promise<File> {
+  if (typeof createImageBitmap !== 'function') {
+    if (file.size > MAX_UPLOAD_BYTES) throw new Error('사진은 10MB 이하로 올려주세요.');
+    return file;
+  }
+  let bitmap: ImageBitmap;
+  try { bitmap = await createImageBitmap(file); }
+  catch {
+    if (file.size > MAX_UPLOAD_BYTES) throw new Error('사진을 줄일 수 없어요. 10MB 이하의 사진을 선택해 주세요.');
+    return file;
+  }
+  try {
+    const scale = Math.min(1, MAX_IMAGE_EDGE / Math.max(bitmap.width, bitmap.height));
+    if (scale === 1 && file.size <= TARGET_IMAGE_BYTES) return file;
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    const context = canvas.getContext('2d');
+    if (!context) {
+      if (file.size > MAX_UPLOAD_BYTES) throw new Error('사진을 줄일 수 없어요. 10MB 이하의 사진을 선택해 주세요.');
+      return file;
+    }
+    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    let blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((result) => result ? resolve(result) : reject(new Error('사진을 처리하지 못했어요.')), 'image/jpeg', 0.84));
+    for (const quality of [0.72, 0.58]) {
+      if (blob.size <= TARGET_IMAGE_BYTES) break;
+      blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((result) => result ? resolve(result) : reject(new Error('사진을 처리하지 못했어요.')), 'image/jpeg', quality));
+    }
+    if (blob.size > MAX_UPLOAD_BYTES) throw new Error('사진은 10MB 이하로 올려주세요.');
+    const filename = file.name.replace(/\.[^.]+$/, '') || 'forest-photo';
+    return new File([blob], `${filename}.jpg`, { type: 'image/jpeg', lastModified: file.lastModified });
+  } finally { bitmap.close(); }
+}
+
 function TeamPage() {
   const params = useParams<{ teamNumber: string }>();
   const [, navigate] = useLocation();
@@ -82,13 +120,24 @@ function TeamPage() {
     if (!file) return;
     setUploadError('');
     if (!file.type.startsWith('image/')) { setUploadError('사진 파일을 선택해 주세요.'); return; }
-    if (file.size > 12 * 1024 * 1024) { setUploadError('사진은 12MB 이하로 올려주세요.'); return; }
     setBusyMission(cell.missionNumber);
     try {
-      const upload = await requestUpload.mutateAsync({ data: { teamNumber, missionNumber: cell.missionNumber, originalName: file.name.slice(0, 255), contentType: file.type, size: file.size } });
-      const put = await fetch(upload.uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
-      if (!put.ok) throw new Error('사진을 저장하지 못했습니다.');
-      await savePhoto.mutateAsync({ teamNumber, missionNumber: cell.missionNumber, data: { objectPath: upload.objectPath, originalName: file.name, contentType: file.type, size: file.size } });
+      const prepared = await preparePhoto(file);
+      if (prepared.size > MAX_UPLOAD_BYTES) throw new Error('사진은 10MB 이하로 올려주세요.');
+      const originalName = file.name.slice(0, 255);
+      const upload = await requestUpload.mutateAsync({ data: { teamNumber, missionNumber: cell.missionNumber, originalName, contentType: prepared.type, size: prepared.size } });
+      const form = new FormData();
+      form.append('file', prepared);
+      form.append('api_key', upload.apiKey);
+      form.append('timestamp', String(upload.timestamp));
+      form.append('signature', upload.signature);
+      form.append('folder', upload.folder);
+      form.append('public_id', upload.publicId);
+      form.append('overwrite', 'false');
+      const response = await fetch(upload.uploadUrl, { method: 'POST', body: form });
+      const result = await response.json() as { secure_url?: string; public_id?: string; error?: { message?: string } };
+      if (!response.ok || !result.secure_url || !result.public_id) throw new Error(result.error?.message || '사진을 저장하지 못했습니다.');
+      await savePhoto.mutateAsync({ teamNumber, missionNumber: cell.missionNumber, data: { imageUrl: result.secure_url, publicId: result.public_id, originalName, contentType: prepared.type, size: prepared.size } });
       await Promise.all([qc.invalidateQueries({ queryKey: getGetBingoTeamQueryKey(teamNumber) }), qc.invalidateQueries({ queryKey: getListBingoTeamsQueryKey() })]);
     } catch (error) { setUploadError(error instanceof Error ? error.message : '사진 업로드에 실패했어요. 다시 시도해 주세요.'); }
     finally { setBusyMission(null); }
@@ -105,10 +154,9 @@ function TeamPage() {
     {uploadError && <div className="upload-alert" role="alert"><span>{uploadError}</span><button onClick={() => setUploadError('')} aria-label="오류 닫기"><X size={16} /></button></div>}
     <div className="bingo-board" data-testid="grid-mission-board">{cells.map((cell, index) => <article className={`mission-cell ${cell.photo ? 'cell-filled' : ''} ${busyMission === cell.missionNumber ? 'cell-uploading' : ''}`} key={cell.missionNumber}>
       <span className="mission-index">{String(cell.missionNumber).padStart(2, '0')}</span>
-      {cell.photo ? <><div className="cell-image"><PhotoPreview imageUrl={cell.photo.imageUrl} alt={`${cell.description} 사진`} /><span className="photo-check"><Check size={13} /></span></div><div className="cell-copy"><p>{cell.description}</p><small className="photo-name">{cell.photo.originalName}</small></div><label className="cell-change" htmlFor={`photo-${cell.missionNumber}`}>사진 바꾸기</label></>
-        : <><div className="cell-empty-art"><span>{index + 1}</span><ImagePlus size={19} /></div><p className="cell-description">{cell.description}</p><label className="upload-button" htmlFor={`photo-${cell.missionNumber}`}><Camera size={14} /> 사진 올리기</label></>}
+      {cell.photo ? <><div className="cell-image"><PhotoPreview imageUrl={cell.photo.imageUrl} alt={`${cell.description} 사진`} /><span className="photo-check"><Check size={13} /></span></div><div className="cell-copy"><p>{cell.description}</p><small className="photo-name">{cell.photo.originalName}</small></div></>
+        : <><div className="cell-empty-art"><span>{index + 1}</span><ImagePlus size={19} /></div><p className="cell-description">{cell.description}</p><label className="upload-button" htmlFor={`photo-${cell.missionNumber}`}><Camera size={14} /> 사진 올리기</label><input id={`photo-${cell.missionNumber}`} type="file" accept="image/*" capture="environment" className="visually-hidden" onChange={(event) => void handlePhoto(event, cell)} disabled={isBusy} data-testid={`input-photo-${cell.missionNumber}`} /></>}
       {busyMission === cell.missionNumber && <div className="uploading-overlay"><span className="uploading-ring" /><b>사진을 담는 중</b></div>}
-      <input id={`photo-${cell.missionNumber}`} type="file" accept="image/*" capture="environment" className="visually-hidden" onChange={(event) => void handlePhoto(event, cell)} disabled={isBusy} data-testid={`input-photo-${cell.missionNumber}`} />
     </article>)}</div>
     <div className="board-tip"><span className="tip-dash" />사진 한 장이면 미션 완료!<span className="tip-dash" /></div>
     {team.completedAt && <div className="completion-banner"><Sparkles size={18} /><span><b>빙고 완성!</b> 숲에서의 추억을 모두 모았어요.</span>{team.completionRank && <strong>완성 {team.completionRank}위</strong>}</div>}

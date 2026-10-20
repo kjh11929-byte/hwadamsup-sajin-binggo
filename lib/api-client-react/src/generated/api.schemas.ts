@@ -20,6 +20,7 @@ export interface Mission {
 
 export interface BingoPhoto {
   imageUrl: string;
+  publicId: string;
   originalName: string;
   uploadedAt: string;
 }
@@ -72,11 +73,17 @@ export interface PhotoUploadRequest {
 
 export interface PhotoUploadUrl {
   uploadUrl: string;
-  objectPath: string;
+  cloudName: string;
+  apiKey: string;
+  timestamp: number;
+  signature: string;
+  folder: string;
+  publicId: string;
 }
 
 export interface SavePhotoInput {
-  objectPath: string;
+  imageUrl: string;
+  publicId: string;
   originalName: string;
   contentType: string;
   size: number;

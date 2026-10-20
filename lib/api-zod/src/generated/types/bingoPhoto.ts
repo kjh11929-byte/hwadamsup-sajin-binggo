@@ -8,6 +8,7 @@
 
 export interface BingoPhoto {
   imageUrl: string;
+  publicId: string;
   originalName: string;
   uploadedAt: Date;
 }

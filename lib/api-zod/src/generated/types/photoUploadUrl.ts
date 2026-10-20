@@ -8,5 +8,10 @@
 
 export interface PhotoUploadUrl {
   uploadUrl: string;
-  objectPath: string;
+  cloudName: string;
+  apiKey: string;
+  timestamp: number;
+  signature: string;
+  folder: string;
+  publicId: string;
 }

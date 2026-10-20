@@ -7,7 +7,8 @@
  */
 
 export interface SavePhotoInput {
-  objectPath: string;
+  imageUrl: string;
+  publicId: string;
   originalName: string;
   contentType: string;
   size: number;

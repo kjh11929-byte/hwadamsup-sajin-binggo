@@ -27,6 +27,7 @@ export const ListBingoTeamsResponseItem = zod.object({
   "description": zod.string(),
   "photo": zod.union([zod.object({
   "imageUrl": zod.string(),
+  "publicId": zod.string(),
   "originalName": zod.string(),
   "uploadedAt": zod.coerce.date()
 }),zod.null()])
@@ -57,6 +58,7 @@ export const GetBingoTeamResponse = zod.object({
   "description": zod.string(),
   "photo": zod.union([zod.object({
   "imageUrl": zod.string(),
+  "publicId": zod.string(),
   "originalName": zod.string(),
   "uploadedAt": zod.coerce.date()
 }),zod.null()])
@@ -91,7 +93,12 @@ export const RequestBingoPhotoUploadBody = zod.object({
 
 export const RequestBingoPhotoUploadResponse = zod.object({
   "uploadUrl": zod.string(),
-  "objectPath": zod.string()
+  "cloudName": zod.string(),
+  "apiKey": zod.string(),
+  "timestamp": zod.number().int(),
+  "signature": zod.string(),
+  "folder": zod.string(),
+  "publicId": zod.string()
 })
 
 
@@ -110,7 +117,8 @@ export const SaveBingoPhotoParams = zod.object({
 })
 
 export const SaveBingoPhotoBody = zod.object({
-  "objectPath": zod.string(),
+  "imageUrl": zod.string().url(),
+  "publicId": zod.string(),
   "originalName": zod.string(),
   "contentType": zod.string(),
   "size": zod.number().int()
@@ -118,6 +126,7 @@ export const SaveBingoPhotoBody = zod.object({
 
 export const SaveBingoPhotoResponse = zod.object({
   "imageUrl": zod.string(),
+  "publicId": zod.string(),
   "originalName": zod.string(),
   "uploadedAt": zod.coerce.date()
 })
@@ -166,6 +175,7 @@ export const GetAdminOverviewResponse = zod.object({
   "description": zod.string(),
   "photo": zod.union([zod.object({
   "imageUrl": zod.string(),
+  "publicId": zod.string(),
   "originalName": zod.string(),
   "uploadedAt": zod.coerce.date()
 }),zod.null()])
@@ -205,15 +215,5 @@ export const UpdateBingoMissionResponse = zod.object({
   "missionNumber": zod.number().int(),
   "description": zod.string()
 })
-
-
-/**
- * @summary Serve a bingo photo
- */
-export const GetStoredPhotoParams = zod.object({
-  "objectId": zod.coerce.string()
-})
-
-export const GetStoredPhotoResponse = zod.unknown()
 
 

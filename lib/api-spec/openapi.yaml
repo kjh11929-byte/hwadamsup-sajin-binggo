@@ -231,35 +231,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-  /storage/objects/{objectId}:
-    get:
-      operationId: getStoredPhoto
-      tags: [storage]
-      summary: Serve a bingo photo
-      parameters:
-        - name: objectId
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        "200":
-          description: Stored image bytes
-          content:
-            image/jpeg:
-              schema:
-                type: string
-                format: binary
-            image/png:
-              schema:
-                type: string
-                format: binary
-            image/webp:
-              schema:
-                type: string
-                format: binary
-        "404":
-          description: Photo not found
 components:
   schemas:
     HealthStatus:
@@ -288,12 +259,14 @@ components:
       properties:
         imageUrl:
           type: string
+        publicId:
+          type: string
         originalName:
           type: string
         uploadedAt:
           type: string
           format: date-time
-      required: [imageUrl, originalName, uploadedAt]
+      required: [imageUrl, publicId, originalName, uploadedAt]
     BingoCell:
       type: object
       properties:
@@ -364,13 +337,26 @@ components:
       properties:
         uploadUrl:
           type: string
-        objectPath:
+        cloudName:
           type: string
-      required: [uploadUrl, objectPath]
+        apiKey:
+          type: string
+        timestamp:
+          type: integer
+        signature:
+          type: string
+        folder:
+          type: string
+        publicId:
+          type: string
+      required: [uploadUrl, cloudName, apiKey, timestamp, signature, folder, publicId]
     SavePhotoInput:
       type: object
       properties:
-        objectPath:
+        imageUrl:
+          type: string
+          format: uri
+        publicId:
           type: string
         originalName:
           type: string
@@ -378,7 +364,7 @@ components:
           type: string
         size:
           type: integer
-      required: [objectPath, originalName, contentType, size]
+      required: [imageUrl, publicId, originalName, contentType, size]
     AdminCredentials:
       type: object
       properties:
