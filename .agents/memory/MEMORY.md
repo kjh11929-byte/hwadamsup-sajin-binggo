@@ -1,0 +1,1 @@
+- [Cloudinary signature diagnostics](cloudinary-signature-diagnostics.md) — match the canonical request first, then validate API key/secret pairing with a read-only API call.
