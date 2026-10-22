@@ -133,6 +133,41 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /bingo/teams/{teamNumber}/missions/{missionNumber}/photo:
+    delete:
+      operationId: deleteBingoPhoto
+      tags: [bingo]
+      summary: Delete a photo from a bingo cell
+      parameters:
+        - name: teamNumber
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 8
+        - name: missionNumber
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 9
+      responses:
+        "204":
+          description: Photo deleted
+        "400":
+          description: Invalid board location
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Photo or team not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /admin/login:
     post:
       operationId: adminLogin

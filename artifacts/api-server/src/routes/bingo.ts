@@ -249,4 +249,60 @@ router.post(
   },
 );
 
+router.delete(
+  "/bingo/teams/:teamNumber/missions/:missionNumber/photo",
+  async (req, res): Promise<void> => {
+    const params = SaveBingoPhotoParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+
+    const { teamNumber, missionNumber } = params.data;
+
+    const [team] = await db
+      .select({ teamNumber: bingoTeamsTable.teamNumber })
+      .from(bingoTeamsTable)
+      .where(eq(bingoTeamsTable.teamNumber, teamNumber));
+    if (!team) {
+      res.status(404).json({ error: "조를 찾을 수 없습니다." });
+      return;
+    }
+
+    const [deleted] = await db
+      .delete(bingoPhotosTable)
+      .where(
+        and(
+          eq(bingoPhotosTable.teamNumber, teamNumber),
+          eq(bingoPhotosTable.missionNumber, missionNumber),
+        ),
+      )
+      .returning({ id: bingoPhotosTable.id });
+
+    if (!deleted) {
+      res.status(404).json({ error: "삭제할 사진을 찾을 수 없습니다." });
+      return;
+    }
+
+    const [remainingPhotos, teamRecord] = await Promise.all([
+      db
+        .select({ id: bingoPhotosTable.id })
+        .from(bingoPhotosTable)
+        .where(eq(bingoPhotosTable.teamNumber, teamNumber)),
+      db
+        .select()
+        .from(bingoTeamsTable)
+        .where(eq(bingoTeamsTable.teamNumber, teamNumber)),
+    ]);
+    if (remainingPhotos.length < 9 && teamRecord[0]?.completedAt !== null) {
+      await db
+        .update(bingoTeamsTable)
+        .set({ completedAt: null })
+        .where(eq(bingoTeamsTable.teamNumber, teamNumber));
+    }
+
+    res.status(204).end();
+  },
+);
+
 export default router;

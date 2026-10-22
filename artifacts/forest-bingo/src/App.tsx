@@ -1,7 +1,7 @@
 import { useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { Route, Switch, Link, useLocation, useParams, Router as WouterRouter } from 'wouter';
-import { ArrowLeft, ArrowRight, Camera, Check, CheckCircle2, ChevronRight, ImagePlus, LockKeyhole, LogOut, Mountain, RefreshCw, ShieldCheck, Sparkles, Upload, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Camera, Check, CheckCircle2, ChevronRight, ImagePlus, LockKeyhole, LogOut, Mountain, RefreshCw, ShieldCheck, Sparkles, Trash2, Upload, X } from 'lucide-react';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -9,7 +9,7 @@ import NotFound from '@/pages/not-found';
 import {
   getGetAdminOverviewQueryKey, getGetAdminSessionQueryKey, getGetBingoTeamQueryKey,
   getListBingoTeamsQueryKey, useAdminLogin, useAdminLogout, useGetAdminOverview,
-  useGetAdminSession, useGetBingoTeam, useListBingoTeams, useRequestBingoPhotoUpload,
+  useDeleteBingoPhoto, useGetAdminSession, useGetBingoTeam, useListBingoTeams, useRequestBingoPhotoUpload,
   useSaveBingoPhoto, useUpdateBingoMission,
 } from '@workspace/api-client-react';
 import type { BingoCell, BingoTeam, Mission } from '@workspace/api-client-react';
@@ -48,9 +48,10 @@ function HomePage() {
       const number = index + 1;
       const team = teams.find((item) => item.teamNumber === number);
       const filled = team?.filledCount ?? 0;
+      const lines = team?.bingoLineCount ?? 0;
       const isDone = filled >= 9;
       return <button className={`team-tile ${isDone ? 'team-done' : ''}`} key={number} onClick={() => navigate(`/team/${number}`)} data-testid={`button-team-${number}`}>
-        <span className="team-number">{String(number).padStart(2, '0')}</span><span className="team-name">{number}조</span><span className="team-status">{isDone ? <><CheckCircle2 size={13} /> 완성</> : `${filled}/9 미션`}</span><span className="team-progress"><i style={{ width: `${Math.min(filled / 9 * 100, 100)}%` }} /></span><ChevronRight className="team-chevron" size={16} />
+        <span className="team-number">{String(number).padStart(2, '0')}</span><span className="team-name">{number}조</span><span className="team-status">{isDone ? <><CheckCircle2 size={13} /> 완성</> : `${lines}줄 완성`}</span><span className="team-progress"><i style={{ width: `${Math.min(filled / 9 * 100, 100)}%` }} /></span><ChevronRight className="team-chevron" size={16} />
       </button>;
     })}</div>}
     <div className="progress-summary"><div className="summary-icon"><Camera size={17} /></div><div><strong>{teams.reduce((total, team) => total + team.filledCount, 0)}<small> / 72</small></strong><span>사진이 모였어요</span></div><div className="summary-divider" /><div className="summary-finished"><strong>{complete}</strong><span>팀 빙고 완성</span></div></div>
@@ -111,9 +112,19 @@ function TeamPage() {
   const [uploadError, setUploadError] = useState('');
   const requestUpload = useRequestBingoPhotoUpload();
   const savePhoto = useSaveBingoPhoto();
+  const deletePhoto = useDeleteBingoPhoto();
   const qc = useQueryClient();
   const cells = team?.cells ?? [];
-  const isBusy = requestUpload.isPending || savePhoto.isPending;
+  const isBusy = requestUpload.isPending || savePhoto.isPending || deletePhoto.isPending;
+  const handleDelete = async (cell: BingoCell) => {
+    if (!window.confirm('이 사진을 삭제할까요?')) return;
+    setBusyMission(cell.missionNumber);
+    try {
+      await deletePhoto.mutateAsync({ teamNumber, missionNumber: cell.missionNumber });
+      await Promise.all([qc.invalidateQueries({ queryKey: getGetBingoTeamQueryKey(teamNumber) }), qc.invalidateQueries({ queryKey: getListBingoTeamsQueryKey() })]);
+    } catch { setUploadError('사진 삭제에 실패했어요. 다시 시도해 주세요.'); }
+    finally { setBusyMission(null); }
+  };
   const handlePhoto = async (event: ChangeEvent<HTMLInputElement>, cell: BingoCell) => {
     const file = event.target.files?.[0];
     event.target.value = '';
@@ -148,14 +159,14 @@ function TeamPage() {
   const progress = team.filledCount;
   return <Shell><section className="board-page fade-up">
     <Link href="/" className="back-link" data-testid="link-back-home"><ArrowLeft size={17} /> 전체 조 보기</Link>
-    <div className="board-heading"><div><div className="eyebrow">HWADAM FOREST · PHOTO MISSION</div><h1><span className="board-team-number">{String(teamNumber).padStart(2, '0')}</span> {teamNumber}조</h1><p>미션을 사진으로 기록해 보세요.</p></div><div className="board-progress"><strong>{progress}<small>/9</small></strong><span>완료</span></div></div>
+    <div className="board-heading"><div><div className="eyebrow">HWADAM FOREST · PHOTO MISSION</div><h1><span className="board-team-number">{String(teamNumber).padStart(2, '0')}</span> {teamNumber}조</h1><p>미션을 사진으로 기록해 보세요.</p></div><div className="board-progress"><strong>{team.bingoLineCount}</strong><span>줄 완성</span></div></div>
     <div className="board-progress-track"><i style={{ width: `${progress / 9 * 100}%` }} /></div>
     <div className="board-bingo-note"><span className="bingo-mark">B</span><span><b>{team.bingoLineCount}줄 빙고</b><small>가로·세로·대각선 한 줄 완성!</small></span><Sparkles className="note-spark" size={16} /></div>
     {uploadError && <div className="upload-alert" role="alert"><span>{uploadError}</span><button onClick={() => setUploadError('')} aria-label="오류 닫기"><X size={16} /></button></div>}
     <div className="bingo-board" data-testid="grid-mission-board">{cells.map((cell, index) => <article className={`mission-cell ${cell.photo ? 'cell-filled' : ''} ${busyMission === cell.missionNumber ? 'cell-uploading' : ''}`} key={cell.missionNumber}>
       <span className="mission-index">{String(cell.missionNumber).padStart(2, '0')}</span>
-      {cell.photo ? <><div className="cell-image"><PhotoPreview imageUrl={cell.photo.imageUrl} alt={`${cell.description} 사진`} /><span className="photo-check"><Check size={13} /></span></div><div className="cell-copy"><p>{cell.description}</p><small className="photo-name">{cell.photo.originalName}</small></div></>
-        : <><div className="cell-empty-art"><span>{index + 1}</span><ImagePlus size={19} /></div><p className="cell-description">{cell.description}</p><label className="upload-button" htmlFor={`photo-${cell.missionNumber}`}><Camera size={14} /> 사진 올리기</label><input id={`photo-${cell.missionNumber}`} type="file" accept="image/*" capture="environment" className="visually-hidden" onChange={(event) => void handlePhoto(event, cell)} disabled={isBusy} data-testid={`input-photo-${cell.missionNumber}`} /></>}
+      {cell.photo ? <><div className="cell-image"><PhotoPreview imageUrl={cell.photo.imageUrl} alt={`${cell.description} 사진`} /><span className="photo-check"><Check size={13} /></span><button className="photo-delete" type="button" onClick={() => void handleDelete(cell)} disabled={isBusy} aria-label="사진 삭제" data-testid={`button-delete-${cell.missionNumber}`}><Trash2 size={15} /></button></div><div className="cell-copy"><p>{cell.description}</p><small className="photo-name">{cell.photo.originalName}</small></div></>
+        : <><div className="cell-empty-art"><span>{index + 1}</span><ImagePlus size={19} /></div><p className="cell-description">{cell.description}</p><label className="upload-button" htmlFor={`photo-${cell.missionNumber}`}><Camera size={14} /> 사진 올리기</label><input id={`photo-${cell.missionNumber}`} type="file" accept="image/*" className="visually-hidden" onChange={(event) => void handlePhoto(event, cell)} disabled={isBusy} data-testid={`input-photo-${cell.missionNumber}`} /></>}
       {busyMission === cell.missionNumber && <div className="uploading-overlay"><span className="uploading-ring" /><b>사진을 담는 중</b></div>}
     </article>)}</div>
     <div className="board-tip"><span className="tip-dash" />사진 한 장이면 미션 완료!<span className="tip-dash" /></div>

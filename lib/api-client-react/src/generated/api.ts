@@ -472,6 +472,81 @@ export const useSaveBingoPhoto = <TError = ErrorType<ErrorResponse>,
       return useMutation(getSaveBingoPhotoMutationOptions(options));
     }
 
+export const getDeleteBingoPhotoUrl = (teamNumber: number,
+    missionNumber: number,) => {
+
+
+
+
+  return `/api/bingo/teams/${teamNumber}/missions/${missionNumber}/photo`
+}
+
+/**
+ * @summary Delete a photo from a bingo cell
+ */
+export const deleteBingoPhoto = async (teamNumber: number,
+    missionNumber: number, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getDeleteBingoPhotoUrl(teamNumber,missionNumber),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteBingoPhotoMutationKey = () => ['deleteBingoPhoto'] as const;
+
+export const getDeleteBingoPhotoMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteBingoPhoto>>, TError,DeleteBingoPhotoMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteBingoPhoto>>, TError,DeleteBingoPhotoMutationVariables, TContext> => {
+
+const mutationKey = getDeleteBingoPhotoMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteBingoPhoto>>, DeleteBingoPhotoMutationVariables> = (props) => {
+          const {teamNumber,missionNumber} = props ?? {};
+
+          return  deleteBingoPhoto(teamNumber,missionNumber,requestOptions)
+        }
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteBingoPhotoMutationResult = NonNullable<Awaited<ReturnType<typeof deleteBingoPhoto>>>
+
+    export type DeleteBingoPhotoMutationError = ErrorType<ErrorResponse>
+    export type DeleteBingoPhotoMutationVariables = {teamNumber: number;missionNumber: number}
+
+    /**
+ * @summary Delete a photo from a bingo cell
+ */
+export const useDeleteBingoPhoto = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteBingoPhoto>>, TError,DeleteBingoPhotoMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteBingoPhoto>>,
+        TError,
+        DeleteBingoPhotoMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeleteBingoPhotoMutationOptions(options));
+    }
+
 export const getAdminLoginUrl = () => {
 
 
